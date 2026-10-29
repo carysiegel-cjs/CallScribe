@@ -165,7 +165,7 @@ export function CallView({ initial, profile }: { initial: Call; profile: Profile
               : 'Usually under a minute.'}{' '}
             Elapsed {elapsed(call.updated_at, now)}.
           </p>
-          <p className="mt-3 text-sm text-zinc-600">You can leave this page. Processing continues and the call will be ready on your dashboard.</p>
+          <p className="mt-3 text-sm text-zinc-600">You can leave this page. Processing continues and the call will be ready in your Calls list.</p>
           {failures >= 3 && (
             <p role="alert" className="mt-4 text-sm text-amber-800">
               Having trouble reaching the server. Still retrying…{' '}
@@ -179,7 +179,7 @@ export function CallView({ initial, profile }: { initial: Call; profile: Profile
         <div className="card p-6 text-sm">
           <p className="font-medium">This upload didn't finish.</p>
           <p className="mt-1 text-zinc-600">
-            Delete this call and <Link href="/calls/new" className="link">start a new one</Link>. Unfinished uploads are refunded automatically within a few hours.
+            Delete this call and <Link href="/calls/new" className="link">start a new one</Link>. Because it never finished, it won't count against your allowance.
           </p>
         </div>
       )}

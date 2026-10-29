@@ -63,7 +63,7 @@ export async function DELETE(_: Request, { params }: { params: { id: string } })
   const admin = createAdminClient()
   const { data: call } = await admin
     .from('calls')
-    .select('id,audio_path,audio_deleted_at,assemblyai_id')
+    .select('id,status,audio_path,audio_deleted_at,assemblyai_id')
     .eq('id', params.id)
     .eq('user_id', user.id)
     .maybeSingle()
@@ -77,5 +77,9 @@ export async function DELETE(_: Request, { params }: { params: { id: string } })
 
   const { error } = await admin.from('calls').delete().eq('id', call.id).eq('user_id', user.id)
   if (error) return serverError('delete call', error)
+  // An upload that never finished never cost anything, so it shouldn't use up a call.
+  if (call.status === 'uploading') {
+    await admin.from('usage_events').delete().eq('call_id', call.id).eq('kind', 'call')
+  }
   return NextResponse.json({ ok: true })
 }

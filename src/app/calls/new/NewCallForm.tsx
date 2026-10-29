@@ -149,7 +149,7 @@ export function NewCallForm({ maxUploadMB, blockedMessage }: { maxUploadMB: numb
           </label>
           {progress !== null && (
             <div className="mt-3">
-              <div className="flex justify-between text-xs text-zinc-600"><span>Uploading. Keep this tab open.</span><span>{progress}%</span></div>
+              <div className="flex justify-between text-xs text-zinc-600"><span>Uploading. Keep this page open.</span><span>{progress}%</span></div>
               <div className="mt-1 h-2 rounded-full bg-zinc-200" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="Upload progress">
                 <div className="h-2 rounded-full bg-zinc-900 transition-all" style={{ width: `${progress}%` }} />
               </div>
