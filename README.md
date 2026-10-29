@@ -21,7 +21,8 @@ Upload a client call recording (or paste a transcript) → get a proposal, actio
 - **Every job is claimed atomically** with a claim token; a stale job is only reclaimed after 6 min
   (longer than any request can run) and gives up after 3 attempts, so a stuck call never bills forever.
 - **Users can only read their data.** All writes go through the server; quota lives in an append-only
-  `usage_events` ledger (deleting calls doesn't refund usage). Regenerate is capped at 3 per call.
+  `usage_events` ledger (deleting a call doesn't refund usage, except a call whose upload never
+  finished). Regenerate is capped at 3 per call.
 - **Outputs are versioned** in `call_outputs` (every generation and edit). Invoice numbers are
   sequential per user and never change on regenerate.
 - **Stripe state is reconciled** from Stripe's API on every webhook, so out-of-order events can't
