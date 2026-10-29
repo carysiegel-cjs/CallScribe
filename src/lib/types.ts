@@ -1,33 +1,13 @@
-export type LineItem = { description: string; quantity: number; unit_price: number }
+import type { z } from 'zod'
+import type { ActionItemSchema, InvoiceSchema, LineItemSchema, ProposalSchema } from './schemas'
 
-export type Proposal = {
-  title: string
-  overview: string
-  objectives: string[]
-  scope: string[]
-  out_of_scope: string[]
-  deliverables: { name: string; description: string }[]
-  timeline: { phase: string; duration: string }[]
-  pricing: LineItem[]
-  terms: string
-}
+export type LineItem = z.infer<typeof LineItemSchema>
+export type Proposal = z.infer<typeof ProposalSchema>
+export type ActionItem = z.infer<typeof ActionItemSchema>
+export type Invoice = z.infer<typeof InvoiceSchema>
 
-export type ActionItem = {
-  task: string
-  owner: 'me' | 'client' | string
-  due: string | null
-  priority: 'high' | 'medium' | 'low'
-}
-
-export type Invoice = {
-  number: string
-  issue_date: string
-  due_date: string
-  line_items: LineItem[]
-  notes: string
-}
-
-export type CallStatus = 'transcribing' | 'queued' | 'generating' | 'ready' | 'error'
+export type CallStatus = 'uploading' | 'transcribing' | 'queued' | 'generating' | 'ready' | 'error'
+export const PENDING_STATUSES: CallStatus[] = ['uploading', 'transcribing', 'queued', 'generating']
 
 export type Call = {
   id: string
@@ -43,10 +23,18 @@ export type Call = {
   proposal: Proposal | null
   action_items: ActionItem[] | null
   invoice: Invoice | null
+  invoice_number: number | null
+  amount_total: number | null
   error: string | null
+  attempts: number
+  regen_count: number
+  claim_token: string | null
+  next_attempt_at: string | null
   created_at: string
   updated_at: string
 }
+
+export type CallSummary = Pick<Call, 'id' | 'title' | 'client_name' | 'status' | 'created_at' | 'amount_total'>
 
 export type Profile = {
   id: string

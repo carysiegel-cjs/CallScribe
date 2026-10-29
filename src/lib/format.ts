@@ -1,7 +1,11 @@
 import type { LineItem } from './types'
 
 export function money(amount: number, currency = 'USD') {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount || 0)
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount || 0)
+  } catch {
+    return `${currency} ${(amount || 0).toFixed(2)}`
+  }
 }
 
 export function total(items: LineItem[] | undefined | null) {
@@ -9,5 +13,7 @@ export function total(items: LineItem[] | undefined | null) {
 }
 
 export function date(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  // Date-only strings are parsed as UTC; format in UTC so the day doesn't shift.
+  const opts: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' }
+  return new Date(iso).toLocaleDateString('en-US', /^\d{4}-\d{2}-\d{2}$/.test(iso) ? { ...opts, timeZone: 'UTC' } : opts)
 }
