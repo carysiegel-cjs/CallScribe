@@ -7,25 +7,33 @@ Upload a client call recording (or paste a transcript) → get a proposal, actio
 ## How it works
 
 ```
-Browser ──upload──▶ Supabase Storage (private bucket, per-user folder)
-   │
-   └─POST /api/calls ─▶ AssemblyAI submit (signed URL)   status: transcribing
-                        or pasted transcript             status: queued
-Browser polls GET /api/calls/:id/status
-   ├─ transcribing → checks AssemblyAI; on completion saves transcript → queued
-   └─ queued       → atomically claims job → Claude (tool-use JSON) → ready
+1. POST /api/calls            quota checked + usage recorded atomically (create_call RPC)
+                              → returns a one-time signed upload URL (audio) or queues (transcript)
+2. Browser uploads directly to Supabase Storage with a progress bar
+3. POST /api/calls/:id/uploaded → AssemblyAI submit (15-min signed URL, 3h audio cap)
+4. AssemblyAI webhook ─┐
+   Status poll ────────┼─▶ advance(): transcript saved → recording + provider copy deleted
+   Cron sweeper ───────┘           → claim_call RPC → Claude → validated output saved
 ```
 
-No queue or worker needed: the polling request advances the job. The claim is a conditional
-update, so concurrent polls never generate twice; a job stuck in `generating` for 3+ min is reclaimed.
+- **Jobs don't depend on an open tab.** The AssemblyAI webhook and a 1-minute sweeper drive work; the
+  status poll just makes it faster when the user is watching.
+- **Every job is claimed atomically** with a claim token; a stale job is only reclaimed after 6 min
+  (longer than any request can run) and gives up after 3 attempts, so a stuck call never bills forever.
+- **Users can only read their data.** All writes go through the server; quota lives in an append-only
+  `usage_events` ledger (deleting calls doesn't refund usage). Regenerate is capped at 3 per call.
+- **Outputs are versioned** in `call_outputs` (every generation and edit). Invoice numbers are
+  sequential per user and never change on regenerate.
+- **Stripe state is reconciled** from Stripe's API on every webhook, so out-of-order events can't
+  put a user on the wrong plan. Existing subscribers change plan in the Stripe portal.
 
 ## Plans
 
 | Plan | Price | Calls |
 |------|-------|-------|
-| Free trial | $0 | 3 total |
-| Solo | $39/mo | 25 / month |
-| Pro | $79/mo | Unlimited |
+| Free trial | $0 | 3 total (50 MB uploads) |
+| Solo | $39/mo | 25 / month (200 MB uploads) |
+| Pro | $79/mo | Unlimited (200 MB uploads) |
 
 Edit limits in `src/lib/plans.ts`.
 
@@ -33,22 +41,25 @@ Edit limits in `src/lib/plans.ts`.
 
 ### 1. Supabase
 1. Create a project at supabase.com.
-2. SQL Editor → paste and run `supabase/schema.sql` (tables, RLS, profile trigger, `recordings` bucket).
+2. SQL Editor → paste and run `supabase/schema.sql` (tables, RLS, RPCs, `recordings` bucket).
 3. Authentication → URL Configuration: set **Site URL** to your app URL and add
    `http://localhost:3000/auth/callback` and `https://YOUR-DOMAIN/auth/callback` to **Redirect URLs**.
-4. Storage → Settings: raise the global upload limit if needed (free plan caps at 50 MB per file;
-   a 1-hour call as MP3 is ~60 MB, as M4A ~30 MB).
+4. Storage → Settings: the free Supabase plan caps uploads at 50 MB globally. For 200 MB paid
+   uploads, upgrade Supabase and raise the global limit.
 5. Project Settings → API: copy URL, `anon` key, `service_role` key.
 
 ### 2. AssemblyAI
-Sign up at assemblyai.com and copy the API key (~$0.15–0.37/hr of audio depending on model).
+Sign up at assemblyai.com and copy the API key (~$0.15–0.37/hr of audio). Set
+`ASSEMBLYAI_WEBHOOK_SECRET` to any random string (`openssl rand -hex 32`). Webhooks are only
+registered when `NEXT_PUBLIC_APP_URL` is https; locally the status poll drives jobs instead.
 
 ### 3. Anthropic
 Create an API key at console.anthropic.com. Model defaults to `claude-sonnet-5-5`; override with `ANTHROPIC_MODEL`.
 
 ### 4. Stripe
 1. Products → create **Solo** ($39/mo recurring) and **Pro** ($79/mo recurring). Copy both price IDs.
-2. Settings → Billing → Customer portal: enable it (plan switching + cancellation).
+2. Settings → Billing → Customer portal: enable it, and turn on **switch plans** with both prices
+   (subscribers upgrade/downgrade there; a second Checkout is blocked to avoid double billing).
 3. Webhook (after deploy): Developers → Webhooks → add endpoint
    `https://YOUR-DOMAIN/api/stripe/webhook` with events
    `checkout.session.completed`, `customer.subscription.created`,
@@ -63,14 +74,33 @@ npm install
 npm run dev
 ```
 
+### 5b. Background sweeper (required in production)
+Picks up missed webhooks, retries and abandoned uploads (refunds unfinished uploads after 3h).
+- **Free option:** Supabase → Database → Extensions: enable `pg_cron` and `pg_net`, then run the
+  commented `cron.schedule(...)` block at the bottom of `schema.sql` with your domain and `CRON_SECRET`.
+- **Vercel Pro:** add `{"crons":[{"path":"/api/cron/sweep","schedule":"* * * * *"}]}` to `vercel.json`.
+  Vercel sends `Authorization: Bearer $CRON_SECRET` automatically. (Hobby only allows daily crons.)
+
 ## Deploy to Vercel
 1. Push this repo to GitHub.
 2. vercel.com → Add New Project → import the repo (framework auto-detected).
 3. Add every variable from `.env.example`; set `NEXT_PUBLIC_APP_URL` to the production URL.
 4. Deploy. Then add the Stripe webhook (step 4.3) and Supabase redirect URL (step 1.3) for that domain.
 
-`/api/calls/[id]/status` sets `maxDuration = 300`. On Vercel Hobby the cap is 60 s, which is enough
-for typical calls; long transcripts (2h+) may need Pro.
+Generation routes set `maxDuration = 300` and Claude calls time out at 240 s. On Vercel Hobby
+functions stop at 60 s: typical calls finish in time, but very long transcripts will fail after
+3 attempts (no runaway cost). Use Vercel Pro for 2h+ calls.
+
+## Security model
+- RLS: users can `select` their own rows only; no insert/update/delete grants on `calls`,
+  `call_outputs`, `usage_events`. Profile updates limited to business fields by column grant.
+- RPCs (`create_call`, `claim_call`, `regenerate_call`, `next_invoice_number`) are service-role only.
+- Storage: no user write policies; uploads use server-issued signed upload URLs for server-chosen paths.
+  Bucket restricted to `audio/*` and `video/*`. Recordings deleted after transcription.
+- CSRF: non-GET `/api/*` requests must carry a same-origin `Origin` header (middleware).
+- Open redirects blocked by resolving `next` and comparing origins.
+- Transcripts are treated as untrusted data in the prompt; outputs are zod-validated and shown with
+  an "AI draft, review before sending" notice.
 
 ## Unit economics (per 1-hour call)
 - AssemblyAI: ~$0.15–0.37
@@ -82,14 +112,16 @@ for typical calls; long transcripts (2h+) may need Pro.
 supabase/schema.sql            DB, RLS, storage bucket
 src/lib/ai.ts                  Claude prompt + JSON schema (tool use)
 src/lib/transcribe.ts          AssemblyAI submit/check
-src/lib/pipeline.ts            State machine: transcribing → queued → generating → ready
+src/lib/pipeline.ts            Job state machine + sweeper
+src/lib/schemas.ts             zod schemas for AI output and user edits
 src/lib/quota.ts, plans.ts     Plan limits
 src/app/api/...                Calls, profile, Stripe checkout/portal/webhook
 src/app/calls/[id]/CallView.tsx Proposal / action items / invoice / transcript views
 ```
 
 ## Next steps after MVP
-- Editable invoice line items before sending
 - Stripe payment links on invoices
+- Server-side PDF generation and email sending (Resend)
+- Version history UI (data already stored in `call_outputs`)
 - Zoom / Google Meet import
 - Custom proposal templates and branding (logo)

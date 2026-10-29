@@ -1,14 +1,16 @@
 import type { CallStatus } from '@/lib/types'
 
 const styles: Record<CallStatus, string> = {
-  transcribing: 'bg-amber-50 text-amber-700',
-  queued: 'bg-amber-50 text-amber-700',
-  generating: 'bg-blue-50 text-blue-700',
-  ready: 'bg-emerald-50 text-emerald-700',
-  error: 'bg-red-50 text-red-700',
+  uploading: 'bg-amber-50 text-amber-800',
+  transcribing: 'bg-amber-50 text-amber-800',
+  queued: 'bg-amber-50 text-amber-800',
+  generating: 'bg-blue-50 text-blue-800',
+  ready: 'bg-emerald-50 text-emerald-800',
+  error: 'bg-red-50 text-red-800',
 }
 
 const labels: Record<CallStatus, string> = {
+  uploading: 'Uploading',
   transcribing: 'Transcribing',
   queued: 'Queued',
   generating: 'Writing',

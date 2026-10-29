@@ -7,13 +7,13 @@ import { CallView } from './CallView'
 export default async function CallPage({ params }: { params: { id: string } }) {
   const supabase = createClient()
   const [{ data: call }, { data: profile }] = await Promise.all([
-    supabase.from('calls').select('*').eq('id', params.id).single(),
-    supabase.from('profiles').select('*').single(),
+    supabase.from('calls').select('*').eq('id', params.id).maybeSingle(),
+    supabase.from('profiles').select('*').maybeSingle(),
   ])
   if (!call) notFound()
   return (
     <Shell>
-      <CallView initial={call as Call} profile={profile as Profile} />
+      <CallView initial={call as Call} profile={profile as Profile | null} />
     </Shell>
   )
 }

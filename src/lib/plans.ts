@@ -1,10 +1,13 @@
 export const PLANS = {
-  free: { name: 'Free trial', price: 0, callsPerMonth: 3, lifetime: true },
-  solo: { name: 'Solo', price: 39, callsPerMonth: 25, lifetime: false },
-  pro: { name: 'Pro', price: 79, callsPerMonth: Infinity, lifetime: false },
+  free: { name: 'Free trial', price: 0, callsPerMonth: 3, lifetime: true, maxUploadMB: 50 },
+  solo: { name: 'Solo', price: 39, callsPerMonth: 25, lifetime: false, maxUploadMB: 200 },
+  pro: { name: 'Pro', price: 79, callsPerMonth: Infinity, lifetime: false, maxUploadMB: 200 },
 } as const
 
 export type PlanId = keyof typeof PLANS
+
+export const MAX_REGENERATIONS = 3
+export const MAX_AUDIO_MS = 3 * 60 * 60 * 1000 // transcription stops after 3h
 
 export function priceIdFor(plan: 'solo' | 'pro') {
   return plan === 'solo' ? process.env.STRIPE_PRICE_SOLO! : process.env.STRIPE_PRICE_PRO!
