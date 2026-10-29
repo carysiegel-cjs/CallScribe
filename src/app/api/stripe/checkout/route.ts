@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/supabase/server'
-import { stripe } from '@/lib/stripe'
+import { billingEnabled, stripe } from '@/lib/stripe'
 import { priceIdFor } from '@/lib/plans'
 import { planOf } from '@/lib/quota'
 import { jsonError, readJson, serverError } from '@/lib/http'
@@ -9,6 +9,7 @@ import type { Profile } from '@/lib/types'
 export async function POST(req: Request) {
   const { supabase, user } = await requireUser()
   if (!user) return jsonError('Unauthorized', 401)
+  if (!billingEnabled()) return jsonError('Paid plans are not available yet.', 503)
 
   const { plan } = ((await readJson(req)) ?? {}) as { plan?: string }
   if (plan !== 'solo' && plan !== 'pro') return jsonError('Bad plan', 400)

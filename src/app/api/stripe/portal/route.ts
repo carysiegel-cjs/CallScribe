@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/supabase/server'
-import { stripe } from '@/lib/stripe'
+import { billingEnabled, stripe } from '@/lib/stripe'
 import { jsonError, serverError } from '@/lib/http'
 
 export async function POST() {
   const { supabase, user } = await requireUser()
   if (!user) return jsonError('Unauthorized', 401)
+  if (!billingEnabled()) return jsonError('Paid plans are not available yet.', 503)
   const { data: profile } = await supabase.from('profiles').select('stripe_customer_id').eq('id', user.id).maybeSingle()
   if (!profile?.stripe_customer_id) return jsonError('No subscription yet', 400)
 

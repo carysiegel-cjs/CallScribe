@@ -4,6 +4,10 @@ import { createAdminClient } from './supabase/admin'
 
 export const stripe = () => new Stripe(process.env.STRIPE_SECRET_KEY!)
 
+// Paid plans are offered only once Stripe is configured; until then the free trial still works.
+export const billingEnabled = () =>
+  Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_SOLO && process.env.STRIPE_PRICE_PRO)
+
 const RANK: Record<PlanId, number> = { free: 0, solo: 1, pro: 2 }
 
 // Recompute the plan from Stripe's current state instead of trusting a single

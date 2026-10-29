@@ -68,12 +68,13 @@ export function ProfileForm({ profile, returnTo }: { profile: Profile; returnTo:
   )
 }
 
-export function BillingCard({ plan, planName, hasCustomer, autoCheckout, usage }: {
+export function BillingCard({ plan, planName, hasCustomer, autoCheckout, usage, billingEnabled }: {
   plan: PlanId
   planName: string
   hasCustomer: boolean
   autoCheckout: 'solo' | 'pro' | null
   usage: React.ReactNode
+  billingEnabled: boolean
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -105,7 +106,10 @@ export function BillingCard({ plan, planName, hasCustomer, autoCheckout, usage }
       <p className="text-sm">You are on <b>{planName}</b>.</p>
       {usage}
       <div className="flex flex-wrap gap-2">
-        {!subscribed && (
+        {!subscribed && !billingEnabled && (
+          <p className="text-sm text-zinc-600">Paid plans are coming soon.</p>
+        )}
+        {!subscribed && billingEnabled && (
           <>
             <button disabled={busy} onClick={() => go('/api/stripe/checkout', { plan: 'solo' })} className="btn-ghost">Solo: $39/mo</button>
             <button disabled={busy} onClick={() => go('/api/stripe/checkout', { plan: 'pro' })} className="btn-primary">Pro: $79/mo</button>

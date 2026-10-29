@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server'
 import type Stripe from 'stripe'
-import { stripe, syncCustomer } from '@/lib/stripe'
+import { billingEnabled, stripe, syncCustomer } from '@/lib/stripe'
 
 export async function POST(req: Request) {
+  if (!billingEnabled() || !process.env.STRIPE_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: 'Billing not configured' }, { status: 503 })
+  }
   const sig = req.headers.get('stripe-signature')
   const body = await req.text()
 

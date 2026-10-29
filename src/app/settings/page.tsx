@@ -3,6 +3,7 @@ import { UsageMeter } from '@/components/UsageMeter'
 import { createClient } from '@/lib/supabase/server'
 import { PLANS } from '@/lib/plans'
 import { planOf, usage } from '@/lib/quota'
+import { billingEnabled } from '@/lib/stripe'
 import type { Profile } from '@/lib/types'
 import { BillingCard, ProfileForm } from './SettingsForms'
 
@@ -33,7 +34,8 @@ export default async function Settings({ searchParams }: { searchParams: { upgra
             plan={plan}
             planName={PLANS[plan].name}
             hasCustomer={!!profile.stripe_customer_id}
-            autoCheckout={plan === 'free' ? wanted : null}
+            autoCheckout={plan === 'free' && billingEnabled() ? wanted : null}
+            billingEnabled={billingEnabled()}
             usage={<UsageMeter used={u.used} limit={u.limit} lifetime={u.lifetime} />}
           />
           <div className="card p-6">
