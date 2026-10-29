@@ -13,11 +13,12 @@ jobs:
       issues: write
       id-token: write
     env:
-      HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+      # The Anthropic key may be saved under any of these names.
+      HAS_KEY: ${{ (secrets.ANTHROPIC_API_KEY || secrets.CALLSCRIBE_KEY || secrets.CALLSCRIBE_API_KEY || secrets.CALLSCRIBE || secrets.CALL_SCRIBE_KEY || secrets.ANTHROPIC_KEY || secrets.CLAUDE_API_KEY) != '' }}
     steps:
-      - name: Skip (no ANTHROPIC_API_KEY secret yet)
+      - name: Skip (no Anthropic key secret yet)
         if: env.HAS_KEY != 'true'
-        run: echo "Add the ANTHROPIC_API_KEY repository secret to enable automatic reviews."
+        run: echo "No Anthropic key secret found (looked for ANTHROPIC_API_KEY, CALLSCRIBE_KEY, CALLSCRIBE_API_KEY, CALLSCRIBE, CALL_SCRIBE_KEY, ANTHROPIC_KEY, CLAUDE_API_KEY); skipping review."
 
       - uses: actions/checkout@v4
         if: env.HAS_KEY == 'true'
@@ -27,7 +28,7 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         if: env.HAS_KEY == 'true'
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY || secrets.CALLSCRIBE_KEY || secrets.CALLSCRIBE_API_KEY || secrets.CALLSCRIBE || secrets.CALL_SCRIBE_KEY || secrets.ANTHROPIC_KEY || secrets.CLAUDE_API_KEY }}
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
