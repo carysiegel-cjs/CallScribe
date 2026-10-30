@@ -154,7 +154,13 @@ ${transcript.slice(0, MAX_TRANSCRIPT_CHARS)}
   if (res.status === 429 || res.status >= 500) throw new RetryableError(`LLM gateway ${res.status}`)
   if (!res.ok) throw new Error(`LLM gateway ${res.status}: ${(await res.text()).slice(0, 300)}`)
 
-  const body = (await res.json()) as { choices?: GatewayChoice[] }
+  let body: { choices?: GatewayChoice[] }
+  try {
+    body = (await res.json()) as { choices?: GatewayChoice[] }
+  } catch (e) {
+    // Timeout mid-body or a truncated/non-JSON response: transient, so retry.
+    throw new RetryableError(e instanceof Error ? e.message : 'Bad gateway response')
+  }
   const choices = body.choices ?? []
   // finish_reason is passed through per provider (Claude: max_tokens, OpenAI: length).
   if (choices.some((c) => c.finish_reason === 'max_tokens' || c.finish_reason === 'length')) {
