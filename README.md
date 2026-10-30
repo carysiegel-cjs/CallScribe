@@ -2,7 +2,7 @@
 
 Upload a client call recording (or paste a transcript) → get a proposal, action items and an invoice.
 
-**Stack:** Next.js 14 (App Router) · Supabase (auth, Postgres, storage) · AssemblyAI (transcription) · Claude (generation) · Stripe (subscriptions) · Vercel (hosting).
+**Stack:** Next.js 14 (App Router) · Supabase (auth, Postgres, storage) · AssemblyAI (transcription + LLM Gateway running Claude Haiku for generation) · Stripe (subscriptions) · Vercel (hosting).
 
 ## How it works
 
@@ -49,15 +49,14 @@ Edit limits in `src/lib/plans.ts`.
    uploads, upgrade Supabase and raise the global limit.
 5. Project Settings → API: copy URL, `anon` key, `service_role` key.
 
-### 2. AssemblyAI
-Sign up at assemblyai.com and copy the API key (~$0.15–0.37/hr of audio). Set
+### 2. AssemblyAI (one key for transcription and generation)
+Sign up at assemblyai.com and copy the API key. Transcription uses `universal-2` + speaker labels
+($0.17/hr of audio); documents are written by `claude-haiku-5-5` through AssemblyAI's LLM Gateway
+(~$0.003 per call; override with `LLM_MODEL`). Set
 `ASSEMBLYAI_WEBHOOK_SECRET` to any random string (`openssl rand -hex 32`). Webhooks are only
 registered when `NEXT_PUBLIC_APP_URL` is https; locally the status poll drives jobs instead.
 
-### 3. Anthropic
-Create an API key at console.anthropic.com. Model defaults to `claude-sonnet-5-5`; override with `ANTHROPIC_MODEL`.
-
-### 4. Stripe
+### 3. Stripe
 1. Products → create **Solo** ($39/mo recurring) and **Pro** ($79/mo recurring). Copy both price IDs.
 2. Settings → Billing → Customer portal: enable it, and turn on **switch plans** with both prices
    (subscribers upgrade/downgrade there; a second Checkout is blocked to avoid double billing).
@@ -68,14 +67,14 @@ Create an API key at console.anthropic.com. Model defaults to `claude-sonnet-5-5
 
 Local webhook testing: `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
 
-### 5. Run locally
+### 4. Run locally
 ```bash
 cp .env.example .env.local   # fill in values
 npm install
 npm run dev
 ```
 
-### 5b. Background sweeper (required in production)
+### 4b. Background sweeper (required in production)
 Picks up missed webhooks, retries and abandoned uploads (refunds unfinished uploads after 3h).
 - **Free option:** Supabase → Database → Extensions: enable `pg_cron` and `pg_net`, then run the
   commented `cron.schedule(...)` block at the bottom of `schema.sql` with your domain and `CRON_SECRET`.
@@ -86,9 +85,9 @@ Picks up missed webhooks, retries and abandoned uploads (refunds unfinished uplo
 1. Push this repo to GitHub.
 2. vercel.com → Add New Project → import the repo (framework auto-detected).
 3. Add every variable from `.env.example`; set `NEXT_PUBLIC_APP_URL` to the production URL.
-4. Deploy. Then add the Stripe webhook (step 4.3) and Supabase redirect URL (step 1.3) for that domain.
+4. Deploy. Then add the Stripe webhook (step 3.3) and Supabase redirect URL (step 1.3) for that domain.
 
-Generation routes set `maxDuration = 300` and Claude calls time out at 240 s. On Vercel Hobby
+Generation routes set `maxDuration = 300` and LLM calls time out at 240 s. On Vercel Hobby
 functions stop at 60 s: typical calls finish in time, but very long transcripts will fail after
 3 attempts (no runaway cost). Use Vercel Pro for 2h+ calls.
 
@@ -104,14 +103,14 @@ functions stop at 60 s: typical calls finish in time, but very long transcripts 
   an "AI draft, review before sending" notice.
 
 ## Unit economics (per 1-hour call)
-- AssemblyAI: ~$0.15–0.37
-- Claude Sonnet: ~15k input + ~3k output tokens ≈ $0.10
-- **≈ $0.50 per call** → Solo at 25 calls ≈ $12.50 cost on $39 revenue worst case.
+- Transcription (`universal-2` + speaker labels): $0.17
+- Generation (`claude-haiku-5-5` via LLM Gateway, ~15k input + ~3k output tokens): ~$0.003
+- **≈ $0.17 per call** → Solo at 25 calls ≈ $4.30 cost on $39 revenue worst case.
 
 ## Project layout
 ```
 supabase/schema.sql            DB, RLS, storage bucket
-src/lib/ai.ts                  Claude prompt + JSON schema (tool use)
+src/lib/ai.ts                  Prompt + JSON schema (tool use) via AssemblyAI LLM Gateway
 src/lib/transcribe.ts          AssemblyAI submit/check
 src/lib/pipeline.ts            Job state machine + sweeper
 src/lib/schemas.ts             zod schemas for AI output and user edits
