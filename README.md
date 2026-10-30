@@ -56,7 +56,7 @@ Sign up at assemblyai.com and copy the API key. Transcription uses `universal-2`
 `ASSEMBLYAI_WEBHOOK_SECRET` to any random string (`openssl rand -hex 32`). Webhooks are only
 registered when `NEXT_PUBLIC_APP_URL` is https; locally the status poll drives jobs instead.
 
-### 4. Stripe
+### 3. Stripe
 1. Products → create **Solo** ($39/mo recurring) and **Pro** ($79/mo recurring). Copy both price IDs.
 2. Settings → Billing → Customer portal: enable it, and turn on **switch plans** with both prices
    (subscribers upgrade/downgrade there; a second Checkout is blocked to avoid double billing).
@@ -67,14 +67,14 @@ registered when `NEXT_PUBLIC_APP_URL` is https; locally the status poll drives j
 
 Local webhook testing: `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
 
-### 5. Run locally
+### 4. Run locally
 ```bash
 cp .env.example .env.local   # fill in values
 npm install
 npm run dev
 ```
 
-### 5b. Background sweeper (required in production)
+### 4b. Background sweeper (required in production)
 Picks up missed webhooks, retries and abandoned uploads (refunds unfinished uploads after 3h).
 - **Free option:** Supabase → Database → Extensions: enable `pg_cron` and `pg_net`, then run the
   commented `cron.schedule(...)` block at the bottom of `schema.sql` with your domain and `CRON_SECRET`.
@@ -85,7 +85,7 @@ Picks up missed webhooks, retries and abandoned uploads (refunds unfinished uplo
 1. Push this repo to GitHub.
 2. vercel.com → Add New Project → import the repo (framework auto-detected).
 3. Add every variable from `.env.example`; set `NEXT_PUBLIC_APP_URL` to the production URL.
-4. Deploy. Then add the Stripe webhook (step 4.3) and Supabase redirect URL (step 1.3) for that domain.
+4. Deploy. Then add the Stripe webhook (step 3.3) and Supabase redirect URL (step 1.3) for that domain.
 
 Generation routes set `maxDuration = 300` and LLM calls time out at 240 s. On Vercel Hobby
 functions stop at 60 s: typical calls finish in time, but very long transcripts will fail after

@@ -130,37 +130,35 @@ ${transcript.slice(0, MAX_TRANSCRIPT_CHARS)}
   const key = process.env.ASSEMBLYAI_API_KEY
   if (!key) throw new Error('ASSEMBLYAI_API_KEY is not set')
 
-  let res: Response
-  try {
-    res = await fetch(GATEWAY_URL, {
-      method: 'POST',
-      headers: { authorization: key, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 8000,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-        tools: [tool],
-        tool_choice: { type: 'function', function: { name: TOOL_NAME } },
-      }),
-      signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
-    })
-  } catch (e) {
-    // Network failure or timeout.
-    throw new RetryableError(e instanceof Error ? e.message : 'Provider unavailable')
-  }
-  if (res.status === 429 || res.status >= 500) throw new RetryableError(`LLM gateway ${res.status}`)
-  if (!res.ok) throw new Error(`LLM gateway ${res.status}: ${(await res.text()).slice(0, 300)}`)
+  const payload = JSON.stringify({
+    model: MODEL,
+    max_tokens: 8000,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    tools: [tool],
+    tool_choice: { type: 'function', function: { name: TOOL_NAME } },
+  })
 
+  // One quick in-request retry for transient gateway errors, as long as most of the time
+  // budget is left; otherwise the pipeline's own requeue (claim_call attempts) takes over.
+  const started = Date.now()
   let body: { choices?: GatewayChoice[] }
-  try {
-    body = (await res.json()) as { choices?: GatewayChoice[] }
-  } catch (e) {
-    // Timeout mid-body or a truncated/non-JSON response: transient, so retry.
-    throw new RetryableError(e instanceof Error ? e.message : 'Bad gateway response')
+  for (let attempt = 1; ; attempt++) {
+    try {
+      body = await callGateway(key, payload, GENERATION_TIMEOUT_MS - (Date.now() - started))
+      break
+    } catch (e) {
+      const elapsed = Date.now() - started
+      if (e instanceof RetryableError && attempt === 1 && elapsed < GENERATION_TIMEOUT_MS / 3) {
+        await new Promise((r) => setTimeout(r, 2000))
+        continue
+      }
+      throw e
+    }
   }
+
   const choices = body.choices ?? []
   // finish_reason is passed through per provider (Claude: max_tokens, OpenAI: length).
   if (choices.some((c) => c.finish_reason === 'max_tokens' || c.finish_reason === 'length')) {
@@ -179,4 +177,28 @@ ${transcript.slice(0, MAX_TRANSCRIPT_CHARS)}
   const parsed = GeneratedSchema.safeParse(input)
   if (!parsed.success) throw new Error(`Model output failed validation: ${parsed.error.issues[0]?.path.join('.')}`)
   return parsed.data
+}
+
+async function callGateway(key: string, payload: string, timeoutMs: number) {
+  let res: Response
+  try {
+    res = await fetch(GATEWAY_URL, {
+      method: 'POST',
+      headers: { authorization: key, 'content-type': 'application/json' },
+      body: payload,
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+  } catch (e) {
+    // Network failure or timeout.
+    throw new RetryableError(e instanceof Error ? e.message : 'Provider unavailable')
+  }
+  if (res.status === 429 || res.status >= 500) throw new RetryableError(`LLM gateway ${res.status}`)
+  if (!res.ok) throw new Error(`LLM gateway ${res.status}: ${(await res.text()).slice(0, 300)}`)
+
+  try {
+    return (await res.json()) as { choices?: GatewayChoice[] }
+  } catch (e) {
+    // Timeout mid-body or a truncated/non-JSON response: transient, so retry.
+    throw new RetryableError(e instanceof Error ? e.message : 'Bad gateway response')
+  }
 }
