@@ -24,6 +24,8 @@ export async function startTranscription(audioPath: string) {
   if (error || !data) throw new Error(`Could not sign audio URL: ${error?.message}`)
   const t = await client().transcripts.submit({
     audio: data.signedUrl,
+    // Cheapest pre-recorded model ($0.15/hr) + standard speaker labels (+$0.02/hr).
+    speech_models: ['universal-2'],
     speaker_labels: true,
     audio_end_at: MAX_AUDIO_MS,
     ...webhookConfig(),
