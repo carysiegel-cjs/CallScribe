@@ -38,6 +38,12 @@ select pg_temp.must_fail($$select next_invoice_number('11111111-1111-1111-1111-1
 select pg_temp.check(true, 'users cannot change plan, calls, usage or call server functions');
 commit;
 
+select pg_temp.check(not has_function_privilege('anon', 'public.handle_new_user()', 'execute')
+  and not has_function_privilege('authenticated', 'public.handle_new_user()', 'execute'),
+  'handle_new_user not executable by clients');
+select pg_temp.check((select proconfig @> array['search_path=public'] from pg_proc where oid = 'public.touch_updated_at'::regproc),
+  'touch_updated_at has pinned search_path');
+
 -- Users can still edit their own business details.
 begin;
 select set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', true);

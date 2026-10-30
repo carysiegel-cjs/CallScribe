@@ -36,6 +36,8 @@ begin
   return new;
 end $$;
 
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
@@ -81,7 +83,7 @@ create policy "own calls select" on public.calls for select using (auth.uid() = 
 revoke insert, update, delete on public.calls from authenticated, anon;
 
 create or replace function public.touch_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 begin new.updated_at = now(); return new; end $$;
 
 drop trigger if exists calls_touch on public.calls;
