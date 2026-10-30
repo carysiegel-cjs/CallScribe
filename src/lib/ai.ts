@@ -195,10 +195,16 @@ async function callGateway(key: string, payload: string, timeoutMs: number) {
   if (res.status === 429 || res.status >= 500) throw new RetryableError(`LLM gateway ${res.status}`)
   if (!res.ok) throw new Error(`LLM gateway ${res.status}: ${(await res.text()).slice(0, 300)}`)
 
+  let body: { choices?: GatewayChoice[]; error?: unknown }
   try {
-    return (await res.json()) as { choices?: GatewayChoice[] }
+    body = await res.json()
   } catch (e) {
     // Timeout mid-body or a truncated/non-JSON response: transient, so retry.
     throw new RetryableError(e instanceof Error ? e.message : 'Bad gateway response')
   }
+  // Some upstream failures come back as 200 with an error body and no choices.
+  if (body.error || !body.choices?.length) {
+    throw new RetryableError(`LLM gateway returned no choices: ${JSON.stringify(body.error ?? body).slice(0, 300)}`)
+  }
+  return body
 }
