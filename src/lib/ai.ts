@@ -176,8 +176,21 @@ ${transcript.slice(0, MAX_TRANSCRIPT_CHARS)}
   } catch {
     throw new Error('Model returned malformed JSON')
   }
+  // Some providers return nested objects as JSON-encoded strings; unwrap them before validating.
+  if (input && typeof input === 'object') {
+    for (const [k, v] of Object.entries(input)) {
+      if (typeof v === 'string' && /^\s*[[{]/.test(v)) {
+        try {
+          ;(input as Record<string, unknown>)[k] = JSON.parse(v)
+        } catch {}
+      }
+    }
+  }
   const parsed = GeneratedSchema.safeParse(input)
-  if (!parsed.success) throw new Error(`Model output failed validation: ${parsed.error.issues[0]?.path.join('.')}`)
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0]
+    throw new Error(`Model output failed validation: ${issue?.path.join('.')} (${issue?.message})`)
+  }
   return parsed.data
 }
 
