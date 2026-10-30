@@ -1,12 +1,14 @@
+import { getVercelOidcToken } from '@vercel/oidc'
 import { GeneratedSchema } from './schemas'
 import type { Profile } from './types'
 import type { z } from 'zod'
 
-// Generation runs through AssemblyAI's LLM Gateway, so one AssemblyAI key covers transcription
-// and writing. Claude Haiku 5.5 is the cheapest model that reliably fills the structured tool call
-// (~$0.003 per call); override with LLM_MODEL (gateway model IDs, without the maker prefix).
-export const MODEL = process.env.LLM_MODEL || 'claude-haiku-5-5'
-const GATEWAY_URL = 'https://llm-gateway.assemblyai.com/v1/chat/completions'
+// Generation runs through Vercel AI Gateway, authenticated with the deployment's OIDC token on
+// Vercel (AI_GATEWAY_API_KEY elsewhere). Claude Haiku 5.5 is the cheapest model that reliably
+// fills the structured tool call (~$0.003 per call); override with LLM_MODEL (gateway model IDs,
+// with the maker prefix).
+export const MODEL = process.env.LLM_MODEL || 'anthropic/claude-haiku-5.5'
+const GATEWAY_URL = 'https://ai-gateway.vercel.sh/v1/chat/completions'
 const MAX_TRANSCRIPT_CHARS = 400_000
 // Must finish well inside the route's maxDuration (300s) so failures are recorded, not killed.
 export const GENERATION_TIMEOUT_MS = 240_000
@@ -127,8 +129,8 @@ Call title: ${title}
 ${transcript.slice(0, MAX_TRANSCRIPT_CHARS)}
 </transcript>`
 
-  const key = process.env.ASSEMBLYAI_API_KEY
-  if (!key) throw new Error('ASSEMBLYAI_API_KEY is not set')
+  const key = process.env.AI_GATEWAY_API_KEY || (await getVercelOidcToken().catch(() => ''))
+  if (!key) throw new Error('AI_GATEWAY_API_KEY is not set and no Vercel OIDC token is available')
 
   const payload = JSON.stringify({
     model: MODEL,
@@ -184,7 +186,7 @@ async function callGateway(key: string, payload: string, timeoutMs: number) {
   try {
     res = await fetch(GATEWAY_URL, {
       method: 'POST',
-      headers: { authorization: key, 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
       body: payload,
       signal: AbortSignal.timeout(timeoutMs),
     })

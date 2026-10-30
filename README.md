@@ -49,10 +49,11 @@ Edit limits in `src/lib/plans.ts`.
    uploads, upgrade Supabase and raise the global limit.
 5. Project Settings → API: copy URL, `anon` key, `service_role` key.
 
-### 2. AssemblyAI (one key for transcription and generation)
+### 2. AssemblyAI (transcription) and Vercel AI Gateway (writing)
 Sign up at assemblyai.com and copy the API key. Transcription uses `universal-2` + speaker labels
-($0.17/hr of audio); documents are written by `claude-haiku-5-5` through AssemblyAI's LLM Gateway
-(~$0.003 per call; override with `LLM_MODEL`). Set
+($0.17/hr of audio); documents are written by `anthropic/claude-haiku-5.5` through Vercel AI
+Gateway (~$0.003 per call; override with `LLM_MODEL`). On Vercel the gateway authenticates with the
+deployment's OIDC token, so no key is needed; locally set `AI_GATEWAY_API_KEY`. Set
 `ASSEMBLYAI_WEBHOOK_SECRET` to any random string (`openssl rand -hex 32`). Webhooks are only
 registered when `NEXT_PUBLIC_APP_URL` is https; locally the status poll drives jobs instead.
 
@@ -110,7 +111,7 @@ functions stop at 60 s: typical calls finish in time, but very long transcripts 
 ## Project layout
 ```
 supabase/schema.sql            DB, RLS, storage bucket
-src/lib/ai.ts                  Prompt + JSON schema (tool use) via AssemblyAI LLM Gateway
+src/lib/ai.ts                  Prompt + JSON schema (tool use) via Vercel AI Gateway
 src/lib/transcribe.ts          AssemblyAI submit/check
 src/lib/pipeline.ts            Job state machine + sweeper
 src/lib/schemas.ts             zod schemas for AI output and user edits
